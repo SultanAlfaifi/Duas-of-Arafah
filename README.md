@@ -72,6 +72,10 @@
 ├── script.js
 ├── README.md
 └── assets
+    ├── fonts
+    │   ├── thmanyahsans-Regular.woff2
+    │   ├── thmanyahserifdisplay-Bold.woff2
+    │   └── thmanyahseriftext-Medium.woff2
     └── screenshots
         ├── hero-mobile.png
         ├── reader-mobile.png
@@ -129,6 +133,7 @@ arafah_dua_theme
 - CSS3
 - JavaScript Vanilla
 - LocalStorage
+- Thmanyah Font Family محليًا بصيغة WOFF2
 - CSS Transforms and Transitions
 - Responsive RTL Layout
 

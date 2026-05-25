@@ -753,6 +753,7 @@ const state = {
   gestureBaseIndex: 0,
   gestureDirection: 0,
   gestureCommitted: false,
+  gestureVisualProgress: 0,
   gestureTimer: 0,
   gestureStartedAt: 0,
   wheelTotalDelta: 0,
@@ -1166,6 +1167,7 @@ function resetGestureState() {
   state.gestureActive = false;
   state.gestureDirection = 0;
   state.gestureCommitted = false;
+  state.gestureVisualProgress = 0;
   state.wheelTotalDelta = 0;
 }
 
@@ -1208,16 +1210,33 @@ function beginGesture(direction) {
   state.gestureCommitted = false;
   state.gestureDirection = direction;
   state.gestureBaseIndex = baseIndex;
+  state.gestureVisualProgress = 0;
   state.gestureStartedAt = performance.now();
   scrollToReaderProgress(baseIndex, "auto");
   return true;
 }
 
+function updateGesturePreview(direction, fraction) {
+  const visualIndex = direction > 0 ? state.gestureBaseIndex : state.gestureBaseIndex - 1;
+  if (visualIndex < 0 || visualIndex > maxDuaIndex()) return;
+
+  if (visualIndex !== state.activeIndex || !deck.children.length) {
+    state.activeIndex = visualIndex;
+    renderDeck(visualIndex);
+  }
+
+  const visualFraction = direction > 0 ? fraction : 1 - fraction;
+  updateCardTransforms(clamp(visualFraction, 0, 1));
+  updateFloatingState();
+}
+
 function commitGesture() {
   if (!state.gestureActive || state.gestureCommitted) return;
   const targetIndex = state.gestureBaseIndex + state.gestureDirection;
+  const partialProgress = state.gestureBaseIndex + state.gestureDirection * state.gestureVisualProgress;
   state.gestureCommitted = true;
   state.gestureActive = false;
+  scrollToReaderProgress(partialProgress, "auto");
   lockCardNavigation();
   clearGestureTimer();
   goToDuaIndex(targetIndex);
@@ -1226,6 +1245,8 @@ function commitGesture() {
 function cancelGesture() {
   if (!state.gestureActive || state.gestureCommitted) return;
   const targetIndex = state.gestureBaseIndex;
+  const partialProgress = state.gestureBaseIndex + state.gestureDirection * state.gestureVisualProgress;
+  scrollToReaderProgress(partialProgress, "auto");
   resetGestureState();
   goToDuaIndex(targetIndex);
 }
@@ -1239,7 +1260,8 @@ function applyGestureDelta(deltaY, travelDistance) {
   }
 
   const fraction = clamp(Math.abs(deltaY) / travelDistance, 0, 1);
-  scrollToReaderProgress(state.gestureBaseIndex + direction * fraction, "auto");
+  state.gestureVisualProgress = fraction;
+  updateGesturePreview(direction, fraction);
 
   if (fraction >= CARD_SNAP_THRESHOLD) {
     commitGesture();
@@ -1376,7 +1398,6 @@ function setupCardStepNavigation() {
       if (state.navigating) return;
 
       if (!canStartCardNavigation()) {
-        scrollToReaderProgress(state.settledIndex, "auto");
         return;
       }
 
@@ -1460,7 +1481,6 @@ function setupCardStepNavigation() {
       const deltaX = state.touchStartX - touch.clientX;
 
       if (!canStartCardNavigation()) {
-        scrollToReaderProgress(state.settledIndex, "auto");
         return;
       }
 
