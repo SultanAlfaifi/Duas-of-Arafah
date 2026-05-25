@@ -725,6 +725,7 @@ const state = {
   readCount: 0,
   lastSavedReadCount: -1,
   scrollStep: 480,
+  readerTop: 0,
   ticking: false,
   elapsedBase: 0,
   elapsedStartedAt: Date.now(),
@@ -765,6 +766,10 @@ const state = {
   nextCardAllowedAt: 0,
   touchIsVertical: false,
   navigationFrame: 0,
+  gestureFrame: 0,
+  gesturePendingDelta: 0,
+  gesturePendingTravel: 0,
+  gesturePendingAutoCancel: false,
 };
 
 const root = document.documentElement;
@@ -966,6 +971,16 @@ function createCard(dua, offset) {
   return card;
 }
 
+function deckLayerCountFor(activeIndex) {
+  return Math.min(2, Math.max(duas.length - activeIndex - 2, 0));
+}
+
+function preparePreviewCard(card) {
+  card.classList.add("dua-card--preview");
+  card.setAttribute("aria-hidden", "true");
+  card.style.zIndex = "12";
+}
+
 function renderDeck(activeIndex) {
   if (!duas.length) {
     state.deckLayers = [];
@@ -985,27 +1000,70 @@ function renderDeck(activeIndex) {
 
   deck.replaceChildren();
   const layers = [];
-  const layerCount = Math.min(2, duas.length - activeIndex - 2);
+  const layerCount = deckLayerCountFor(activeIndex);
   for (let offset = layerCount + 1; offset >= 2; offset -= 1) {
     const layer = document.createElement("div");
     layer.className = "deck-layer";
     layer.dataset.offset = String(offset);
     layer.setAttribute("aria-hidden", "true");
+    layer.style.zIndex = String(10 - offset);
     layers.push(layer);
     deck.appendChild(layer);
   }
   let previewCard = null;
   if (duas[activeIndex + 1]) {
     previewCard = createCard(duas[activeIndex + 1], 1);
-    previewCard.classList.add("dua-card--preview");
-    previewCard.setAttribute("aria-hidden", "true");
+    preparePreviewCard(previewCard);
     deck.appendChild(previewCard);
   }
   const currentCard = createCard(duas[activeIndex], 0);
+  currentCard.style.zIndex = "20";
   deck.appendChild(currentCard);
   state.deckLayers = layers;
   state.previewCard = previewCard;
   state.currentCard = currentCard;
+}
+
+function settleRenderedDeck(nextIndex, previousIndex, direction) {
+  const layerCountChanged = deckLayerCountFor(nextIndex) !== deckLayerCountFor(previousIndex);
+  if (layerCountChanged) {
+    state.activeIndex = nextIndex;
+    renderDeck(nextIndex);
+    updateCardTransforms(0);
+    return;
+  }
+
+  if (direction > 0 && state.previewCard && Number(state.previewCard.dataset.cardIndex) === nextIndex) {
+    state.currentCard?.remove();
+    const promotedCard = state.previewCard;
+    promotedCard.classList.remove("dua-card--preview");
+    promotedCard.removeAttribute("aria-hidden");
+    promotedCard.dataset.offset = "0";
+    promotedCard.style.zIndex = "20";
+    promotedCard.style.removeProperty("--preview-content-opacity");
+
+    let previewCard = null;
+    if (duas[nextIndex + 1]) {
+      previewCard = createCard(duas[nextIndex + 1], 1);
+      preparePreviewCard(previewCard);
+      deck.appendChild(previewCard);
+    }
+
+    state.activeIndex = nextIndex;
+    state.currentCard = promotedCard;
+    state.previewCard = previewCard;
+    updateCardTransforms(0);
+    return;
+  }
+
+  if (state.activeIndex === nextIndex && state.currentCard) {
+    updateCardTransforms(0);
+    return;
+  }
+
+  state.activeIndex = nextIndex;
+  renderDeck(nextIndex);
+  updateCardTransforms(0);
 }
 
 function updateCardTransforms(fraction) {
@@ -1015,7 +1073,6 @@ function updateCardTransforms(fraction) {
     const scale = 1 - depth * 0.045;
     const translateY = depth * 24;
     const opacity = 1 - depth * 0.18;
-    layer.style.zIndex = String(10 - offset);
     layer.style.opacity = String(clamp(opacity, 0.25, 0.74));
     layer.style.transform = `translate3d(0, ${translateY}px, 0) scale(${scale})`;
   });
@@ -1025,7 +1082,6 @@ function updateCardTransforms(fraction) {
     const reveal = clamp((fraction - 0.16) / 0.72, 0, 1);
     const scale = 0.955 + reveal * 0.045;
     const translateY = (1 - reveal) * 24;
-    preview.style.zIndex = "12";
     preview.style.opacity = String(0.42 + reveal * 0.58);
     preview.style.transform = `translate3d(0, ${translateY}px, 0) scale(${scale})`;
     preview.style.setProperty("--preview-content-opacity", String(reveal));
@@ -1037,12 +1093,12 @@ function updateCardTransforms(fraction) {
   const rotate = 0;
   const opacity = state.reducedMotion ? 1 : 1 - fraction * 0.62;
   const scale = 1 - fraction * 0.014;
-  card.style.zIndex = "20";
   card.style.opacity = String(clamp(opacity, 0.22, 1));
   card.style.transform = `translate3d(${translateX}%, 0, 0) scale(${scale}) rotate(${rotate}deg)`;
 }
 
 function setupLayout() {
+  state.readerTop = reader.offsetTop;
   state.scrollStep = clamp(window.innerHeight * 0.58, 360, 560);
   root.style.setProperty("--dua-count", String(Math.max(duas.length, 1)));
   root.style.setProperty("--scroll-step", `${state.scrollStep}px`);
@@ -1089,7 +1145,7 @@ function scrollToYInstant(top, shouldRequestUpdate = true) {
 
 function scrollToReaderProgress(progress, behavior = "auto") {
   const nextProgress = clamp(progress, 0, maxDuaIndex());
-  const targetY = reader.offsetTop + nextProgress * state.scrollStep;
+  const targetY = state.readerTop + nextProgress * state.scrollStep;
 
   if (behavior === "smooth" && !state.reducedMotion) {
     window.scrollTo({ top: targetY, behavior: "smooth" });
@@ -1105,12 +1161,20 @@ function easeOutCubic(value) {
 }
 
 function readScrollProgress() {
-  const sectionTop = reader.offsetTop;
-  return clamp((window.scrollY - sectionTop) / state.scrollStep, 0, maxDuaIndex());
+  return clamp((window.scrollY - state.readerTop) / state.scrollStep, 0, maxDuaIndex());
 }
 
 function updateFromScroll() {
   state.ticking = false;
+  if (state.gestureActive || state.navigating) return;
+  if (!canStartCardNavigation() && isReaderInteractionZone()) {
+    const lockedY = state.readerTop + state.settledIndex * state.scrollStep;
+    if (Math.abs(window.scrollY - lockedY) > 1) {
+      scrollToYInstant(lockedY, false);
+    }
+    updateFloatingState();
+    return;
+  }
   const progress = readScrollProgress();
   const nearestProgress = Math.round(progress);
   const isNearSettled = Math.abs(progress - nearestProgress) < 0.06;
@@ -1191,6 +1255,7 @@ function clearGestureTimer() {
 }
 
 function resetGestureState() {
+  cancelQueuedGestureDelta();
   clearGestureTimer();
   state.gestureActive = false;
   state.gestureDirection = 0;
@@ -1210,6 +1275,15 @@ function lockCardNavigation(duration = CARD_STEP_COOLDOWN) {
   const until = performance.now() + duration;
   state.nextCardAllowedAt = Math.max(state.nextCardAllowedAt, until);
   state.wheelLockedUntil = Math.max(state.wheelLockedUntil, until);
+}
+
+function lockCurrentTouchSequence() {
+  if (state.pointerStartedInReader) {
+    state.pointerLocked = true;
+  }
+  if (state.touchStartedInReader) {
+    state.touchLocked = true;
+  }
 }
 
 function canStartCardNavigation() {
@@ -1240,7 +1314,10 @@ function beginGesture(direction) {
   state.gestureBaseIndex = baseIndex;
   state.gestureVisualProgress = 0;
   state.gestureStartedAt = performance.now();
-  scrollToReaderProgress(baseIndex, "auto");
+  const targetY = state.readerTop + baseIndex * state.scrollStep;
+  if (Math.abs(window.scrollY - targetY) > 1) {
+    scrollToYInstant(targetY, false);
+  }
   return true;
 }
 
@@ -1264,6 +1341,7 @@ function commitGesture() {
   state.gestureCommitted = true;
   state.gestureActive = false;
   lockCardNavigation();
+  lockCurrentTouchSequence();
   clearGestureTimer();
   goToDuaIndex(targetIndex);
 }
@@ -1272,6 +1350,61 @@ function cancelGesture() {
   if (!state.gestureActive || state.gestureCommitted) return;
   const targetIndex = state.gestureBaseIndex;
   goToDuaIndex(targetIndex);
+}
+
+function cancelQueuedGestureDelta() {
+  if (state.gestureFrame) {
+    window.cancelAnimationFrame(state.gestureFrame);
+  }
+  state.gestureFrame = 0;
+  state.gesturePendingDelta = 0;
+  state.gesturePendingTravel = 0;
+  state.gesturePendingAutoCancel = false;
+}
+
+function flushQueuedGestureDelta() {
+  if (!state.gestureFrame) return;
+  window.cancelAnimationFrame(state.gestureFrame);
+  state.gestureFrame = 0;
+  const deltaY = state.gesturePendingDelta;
+  const travelDistance = state.gesturePendingTravel;
+  const shouldAutoCancel = state.gesturePendingAutoCancel;
+  state.gesturePendingDelta = 0;
+  state.gesturePendingTravel = 0;
+  state.gesturePendingAutoCancel = false;
+  if (state.navigating || state.pointerLocked || state.touchLocked || !canStartCardNavigation()) {
+    return;
+  }
+  const applied = applyGestureDelta(deltaY, travelDistance);
+  if (applied && shouldAutoCancel && state.gestureActive && !state.gestureCommitted) {
+    scheduleGestureCancel();
+  }
+}
+
+function queueGestureDelta(deltaY, travelDistance, shouldAutoCancel = false) {
+  state.gesturePendingDelta = deltaY;
+  state.gesturePendingTravel = travelDistance;
+  state.gesturePendingAutoCancel = state.gesturePendingAutoCancel || shouldAutoCancel;
+  if (state.gestureFrame) return true;
+
+  state.gestureFrame = window.requestAnimationFrame(() => {
+    state.gestureFrame = 0;
+    const pendingDelta = state.gesturePendingDelta;
+    const pendingTravel = state.gesturePendingTravel;
+    const pendingAutoCancel = state.gesturePendingAutoCancel;
+    state.gesturePendingDelta = 0;
+    state.gesturePendingTravel = 0;
+    state.gesturePendingAutoCancel = false;
+    if (state.navigating || state.pointerLocked || state.touchLocked || !canStartCardNavigation()) {
+      return;
+    }
+    const applied = applyGestureDelta(pendingDelta, pendingTravel);
+    if (applied && pendingAutoCancel && state.gestureActive && !state.gestureCommitted) {
+      scheduleGestureCancel();
+    }
+  });
+
+  return true;
 }
 
 function applyGestureDelta(deltaY, travelDistance) {
@@ -1301,9 +1434,10 @@ function scheduleGestureCancel() {
 
 function goToDuaIndex(targetIndex) {
   window.cancelAnimationFrame(state.navigationFrame);
+  cancelQueuedGestureDelta();
   clearGestureTimer();
   const nextIndex = clamp(targetIndex, 0, maxDuaIndex());
-  const targetY = reader.offsetTop + nextIndex * state.scrollStep;
+  const targetY = state.readerTop + nextIndex * state.scrollStep;
   const previousSettled = clamp(state.settledIndex, 0, maxDuaIndex());
   const gestureDirection = state.gestureDirection;
   const gestureFraction = clamp(state.gestureVisualProgress, 0, 1);
@@ -1325,10 +1459,14 @@ function goToDuaIndex(targetIndex) {
   const finishNavigation = () => {
     scrollToYInstant(targetY, false);
     state.navigating = false;
-    state.activeIndex = -1;
     state.settledIndex = nextIndex;
     resetGestureState();
-    updateFromScroll();
+    settleRenderedDeck(nextIndex, previousSettled, direction);
+    updateCounters(nextIndex);
+    updateFloatingState();
+    if (nextIndex !== previousSettled) {
+      lockCardNavigation(CARD_STEP_COOLDOWN);
+    }
   };
 
   if (!direction || state.reducedMotion || startFraction === endFraction) {
@@ -1372,6 +1510,8 @@ function isReaderInteractionZone() {
 }
 
 function setupCardStepNavigation() {
+  const usePointerTouchGestures = false;
+
   window.addEventListener(
     "wheel",
     (event) => {
@@ -1392,93 +1532,81 @@ function setupCardStepNavigation() {
       }
 
       state.wheelTotalDelta += event.deltaY;
-      applyGestureDelta(state.wheelTotalDelta, wheelTravelDistance());
-      scheduleGestureCancel();
+      queueGestureDelta(state.wheelTotalDelta, wheelTravelDistance(), true);
     },
     { passive: false },
   );
 
-  window.addEventListener(
-    "pointerdown",
-    (event) => {
+  if (usePointerTouchGestures) {
+    window.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (event.pointerType !== "touch") return;
+        state.pointerStartedInReader = isReaderGestureTarget(event.target);
+        if (!state.pointerStartedInReader || state.openModal || !isReaderInteractionZone()) return;
+
+        event.preventDefault();
+        if (state.navigating) return;
+        state.pointerId = event.pointerId;
+        state.pointerStartY = event.clientY;
+        state.pointerStartX = event.clientX;
+        state.pointerLocked = false;
+        state.pointerIsVertical = false;
+        event.target?.setPointerCapture?.(event.pointerId);
+
+        if (!canStartCardNavigation()) {
+          state.pointerLocked = true;
+        }
+      },
+      { passive: false, capture: true },
+    );
+
+    window.addEventListener(
+      "pointermove",
+      (event) => {
+        if (event.pointerType !== "touch") return;
+        if (!state.pointerStartedInReader || state.pointerId !== event.pointerId) return;
+        if (state.openModal) return;
+
+        event.preventDefault();
+        if (state.navigating || state.pointerLocked || !canStartCardNavigation()) return;
+
+        const deltaY = state.pointerStartY - event.clientY;
+        const deltaX = state.pointerStartX - event.clientX;
+
+        if (!state.pointerIsVertical) {
+          if (Math.abs(deltaY) < 10) return;
+          if (Math.abs(deltaY) < Math.abs(deltaX) * 1.25) return;
+          state.pointerIsVertical = true;
+        }
+
+        const direction = deltaY > 0 ? 1 : deltaY < 0 ? -1 : 0;
+        if (!direction) return;
+        if (!state.gestureActive && isAtReaderBoundary(direction)) return;
+
+        queueGestureDelta(deltaY, gestureTravelDistance());
+      },
+      { passive: false, capture: true },
+    );
+
+    const finishPointerGesture = (event) => {
       if (event.pointerType !== "touch") return;
-      state.pointerStartedInReader = isReaderGestureTarget(event.target);
-      if (!state.pointerStartedInReader || state.openModal || !isReaderInteractionZone()) return;
-
-      event.preventDefault();
-      if (state.navigating) return;
-      state.pointerId = event.pointerId;
-      state.pointerStartY = event.clientY;
-      state.pointerStartX = event.clientX;
-      state.pointerLocked = false;
-      state.pointerIsVertical = false;
-      state.touchStartedInReader = false;
-      state.touchLocked = false;
-      state.touchIsVertical = false;
-      event.target?.setPointerCapture?.(event.pointerId);
-
-      if (!canStartCardNavigation()) {
-        state.pointerLocked = true;
+      if (state.pointerId !== null && state.pointerId !== event.pointerId) return;
+      flushQueuedGestureDelta();
+      if (state.gestureActive && !state.gestureCommitted) {
+        cancelGesture();
       }
-    },
-    { passive: false, capture: true },
-  );
+      resetPointerGesture();
+    };
 
-  window.addEventListener(
-    "pointermove",
-    (event) => {
-      if (event.pointerType !== "touch") return;
-      if (!state.pointerStartedInReader || state.pointerId !== event.pointerId) return;
-      if (state.openModal || !isReaderInteractionZone()) return;
-
-      event.preventDefault();
-      if (state.navigating) return;
-
-      if (!canStartCardNavigation()) {
-        return;
-      }
-
-      const deltaY = state.pointerStartY - event.clientY;
-      const deltaX = state.pointerStartX - event.clientX;
-
-      if (!state.pointerIsVertical) {
-        if (Math.abs(deltaY) < 10) return;
-        if (Math.abs(deltaY) < Math.abs(deltaX) * 1.25) return;
-        state.pointerIsVertical = true;
-      }
-
-      const direction = deltaY > 0 ? 1 : deltaY < 0 ? -1 : 0;
-      if (!direction) return;
-      if (!state.gestureActive && isAtReaderBoundary(direction)) return;
-      if (state.navigating || state.pointerLocked || !canStartCardNavigation()) return;
-
-      applyGestureDelta(deltaY, gestureTravelDistance());
-      if (state.gestureCommitted) {
-        state.pointerLocked = true;
-      }
-    },
-    { passive: false, capture: true },
-  );
-
-  const finishPointerGesture = (event) => {
-    if (event.pointerType !== "touch") return;
-    if (state.pointerId !== null && state.pointerId !== event.pointerId) return;
-    if (state.gestureActive && !state.gestureCommitted) {
-      cancelGesture();
-    }
-    resetPointerGesture();
-  };
-
-  window.addEventListener("pointerup", finishPointerGesture, { passive: true, capture: true });
-  window.addEventListener("pointercancel", finishPointerGesture, { passive: true, capture: true });
+    window.addEventListener("pointerup", finishPointerGesture, { passive: true, capture: true });
+    window.addEventListener("pointercancel", finishPointerGesture, { passive: true, capture: true });
+    return;
+  }
 
   window.addEventListener(
     "touchstart",
     (event) => {
-      if (state.pointerStartedInReader) {
-        event.preventDefault();
-        return;
-      }
       const touch = event.touches[0];
       state.touchStartedInReader = isReaderGestureTarget(event.target);
       state.touchStartY = touch.clientY;
@@ -1504,21 +1632,12 @@ function setupCardStepNavigation() {
     "touchmove",
     (event) => {
       if (state.openModal) return;
-      if (state.pointerStartedInReader) {
-        event.preventDefault();
-        return;
-      }
       if (!state.touchStartedInReader) return;
-      if (!isReaderInteractionZone()) return;
       event.preventDefault();
-      if (state.navigating) return;
+      if (state.navigating || state.touchLocked || !canStartCardNavigation()) return;
       const touch = event.touches[0];
       const deltaY = state.touchStartY - touch.clientY;
       const deltaX = state.touchStartX - touch.clientX;
-
-      if (!canStartCardNavigation()) {
-        return;
-      }
 
       if (!state.touchIsVertical) {
         if (Math.abs(deltaY) < 10) return;
@@ -1530,33 +1649,23 @@ function setupCardStepNavigation() {
       if (!direction) return;
       if (!state.gestureActive && isAtReaderBoundary(direction)) return;
 
-      if (state.navigating || state.touchLocked || !canStartCardNavigation()) return;
-
-      applyGestureDelta(deltaY, gestureTravelDistance());
-      if (state.gestureCommitted) {
-        state.touchLocked = true;
-      }
+      queueGestureDelta(deltaY, gestureTravelDistance());
     },
     { passive: false, capture: true },
   );
 
-  window.addEventListener("touchend", () => {
+  const finishTouchGesture = () => {
+    flushQueuedGestureDelta();
     if (state.gestureActive && !state.gestureCommitted) {
       cancelGesture();
     }
     state.touchLocked = false;
     state.touchIsVertical = false;
     state.touchStartedInReader = false;
-  });
+  };
 
-  window.addEventListener("touchcancel", () => {
-    if (state.gestureActive && !state.gestureCommitted) {
-      cancelGesture();
-    }
-    state.touchLocked = false;
-    state.touchIsVertical = false;
-    state.touchStartedInReader = false;
-  });
+  window.addEventListener("touchend", finishTouchGesture, { passive: true, capture: true });
+  window.addEventListener("touchcancel", finishTouchGesture, { passive: true, capture: true });
 }
 
 function resetAllProgress() {
@@ -1571,7 +1680,7 @@ function resetAllProgress() {
   resetPointerGesture();
   updateTimer();
   applyTheme("light");
-  window.scrollTo({ top: reader.offsetTop, behavior: state.reducedMotion ? "auto" : "smooth" });
+  window.scrollTo({ top: state.readerTop, behavior: state.reducedMotion ? "auto" : "smooth" });
   updateCounters(0);
   requestScrollUpdate();
 }
@@ -1608,7 +1717,7 @@ function unlockPageScroll() {
 
 function updateFloatingState() {
   if (!scrollTopButton) return;
-  const show = window.scrollY > reader.offsetTop - 120;
+  const show = window.scrollY > state.readerTop - 120;
   scrollTopButton.classList.toggle("is-visible", show);
 }
 
