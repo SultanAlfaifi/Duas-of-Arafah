@@ -20,7 +20,7 @@
     <td align="center">
       <img src="assets/screenshots/hero-mobile.png" alt="واجهة البداية في الوضع الفاتح" width="260">
       <br>
-      <sub>واجهة البداية</sub>
+      <sub>واجهة البداية للموقع</sub>
     </td>
     <td align="center">
       <img src="assets/screenshots/reader-mobile.png" alt="بطاقات الأدعية في الوضع الفاتح" width="260">
