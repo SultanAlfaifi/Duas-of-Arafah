@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="موقع هادئ لقراءة أدعية يوم عرفة مع حفظ التقدم والوقت والوضع الليلي."
+    />
+    <meta name="theme-color" content="#faf8f2" />
+    <title>أدعية يوم عرفة</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#duas">تجاوز إلى الأدعية</a>
+
+    <main class="page-shell">
+      <header class="hero" aria-labelledby="page-title">
+        <div class="hero__glow" aria-hidden="true"></div>
+        <nav class="topbar" aria-label="أدوات الموقع">
+          <button class="theme-toggle" id="themeToggle" type="button" aria-label="تبديل الوضع الليلي" aria-pressed="false">
+            <span class="theme-toggle__label" id="themeToggleLabel">فاتح</span>
+            <span class="theme-toggle__switch" aria-hidden="true">
+              <span class="theme-toggle__knob"></span>
+            </span>
+          </button>
+          <button class="text-button subtle" id="resetProgress" type="button">إعادة من البداية</button>
+        </nav>
+
+        <section class="hero__content">
+          <p class="eyebrow">خير أيام الدعاء</p>
+          <h1 id="page-title">
+            <span class="title-line">أدعية يوم</span>
+            <span class="title-line">عرفة</span>
+          </h1>
+          <p class="lead">اقرأ، ادعُ، وواصل رحلتك في خير أيام الدعاء</p>
+          <p class="creator-line">
+            صنع بواسطة
+            <a href="https://x.com/SultAlfaifi" target="_blank" rel="noopener noreferrer">@SultAlfaifi</a>
+          </p>
+
+          <div class="stats-panel" aria-label="إحصاءات القراءة">
+            <div class="stat">
+              <span class="stat__value" id="readCount">0</span>
+              <span class="stat__label">مقروءة</span>
+            </div>
+            <div class="stat">
+              <span class="stat__value" id="remainingCount">0</span>
+              <span class="stat__label">متبقية</span>
+            </div>
+            <div class="stat">
+              <span class="stat__value" id="totalCount">0</span>
+              <span class="stat__label">الإجمالي</span>
+            </div>
+          </div>
+
+          <a class="start-reading" href="#duas">ابدأ القراءة</a>
+        </section>
+      </header>
+
+      <section class="reader" id="duas" aria-label="بطاقات الأدعية">
+        <div class="gesture-hint" aria-label="طريقة الانتقال بين البطاقات">
+          <span class="gesture-hint__mark" aria-hidden="true">↑↓</span>
+          <span>اسحب للأسفل للتالي، وللأعلى للسابق</span>
+        </div>
+        <div class="reader__pin">
+          <div class="deck" id="deck" aria-live="polite"></div>
+        </div>
+        <div class="reader__space" id="readerSpace" aria-hidden="true"></div>
+      </section>
+
+      <footer class="site-footer">
+        <span>صنع بواسطة</span>
+        <a href="https://x.com/SultAlfaifi" target="_blank" rel="noopener noreferrer">@SultAlfaifi</a>
+      </footer>
+    </main>
+
+    <button class="scroll-top" id="scrollTop" type="button" aria-label="الرجوع إلى أعلى الصفحة">↑</button>
+
+    <aside class="reader-dock" aria-label="شريط التحكم في القراءة">
+      <div class="dock-metrics" aria-live="polite">
+        <div class="dock-metric">
+          <span>مدة الدعاء</span>
+          <strong id="elapsedTime">00:00:00</strong>
+        </div>
+        <div class="dock-metric">
+          <span>المتبقي المتوقع</span>
+          <strong id="remainingTime">--:--:--</strong>
+        </div>
+      </div>
+      <div class="dock-actions">
+        <button class="dock-button" type="button" data-modal-target="virtueModal">
+          <span aria-hidden="true">✦</span>
+          فضل عرفة
+        </button>
+        <button class="dock-button" type="button" data-modal-target="etiquetteModal">
+          <span aria-hidden="true">◌</span>
+          سنن الدعاء
+        </button>
+      </div>
+      <a class="dock-credit" href="https://x.com/SultAlfaifi" target="_blank" rel="noopener noreferrer">
+        صنع بواسطة @SultAlfaifi
+      </a>
+    </aside>
+
+    <div class="modal-backdrop" id="modalBackdrop" hidden></div>
+
+    <section
+      class="modal"
+      id="virtueModal"
+      aria-modal="true"
+      aria-labelledby="virtueTitle"
+      role="dialog"
+      hidden
+    >
+      <div class="modal__panel">
+        <button class="modal__close" type="button" aria-label="إغلاق النافذة" data-modal-close>×</button>
+        <div class="modal__header">
+          <span class="modal__icon" aria-hidden="true">✦</span>
+          <div>
+            <p class="modal__kicker">يوم الرحمة والمغفرة</p>
+            <h2 id="virtueTitle">فضل يوم عرفة</h2>
+          </div>
+        </div>
+        <p class="modal__lead">وقفة قصيرة تستحضر معنى اليوم قبل أن تبدأ الدعاء بقلب حاضر.</p>
+        <p>
+          يوم عرفة من أعظم أيام الله، وهو اليوم التاسع من ذي الحجة، وفيه يقف الحجاج بعرفة،
+          وهو ركن الحج الأعظم. ومن فضائله أنه يوم إكمال الدين وإتمام النعمة، كما قال الله تعالى:
+          {اليوم أكملت لكم دينكم وأتممت عليكم نعمتي ورضيت لكم الإسلام دينًا}.
+        </p>
+        <p>
+          وهو يوم تكثر فيه مغفرة الله لعباده والعتق من النار، وقد ثبت في صحيح مسلم أن النبي ﷺ قال:
+          «ما من يوم أكثر من أن يعتق الله فيه عبدًا من النار من يوم عرفة». كما أن صيام يوم عرفة
+          لغير الحاج يكفّر سنة ماضية وسنة قادمة كما جاء في صحيح مسلم.
+        </p>
+        <p class="notice">
+          هذا الموقع يساعدك على تنظيم الدعاء، وليس المقصود منه تخصيص أدعية واجبة أو اعتقاد أن هذه
+          الصيغة لازمة، بل ادعُ الله بما شئت من خيري الدنيا والآخرة.
+        </p>
+        <ul class="references">
+          <li>القرآن الكريم، سورة المائدة: 3</li>
+          <li>صحيح مسلم: فضل صيام يوم عرفة والعتق من النار</li>
+          <li>ابن باز: فضل الدعاء في يوم عرفة</li>
+          <li>الإسلام سؤال وجواب: فضل يوم عرفة</li>
+        </ul>
+      </div>
+    </section>
+
+    <section
+      class="modal"
+      id="etiquetteModal"
+      aria-modal="true"
+      aria-labelledby="etiquetteTitle"
+      role="dialog"
+      hidden
+    >
+      <div class="modal__panel">
+        <button class="modal__close" type="button" aria-label="إغلاق النافذة" data-modal-close>×</button>
+        <div class="modal__header">
+          <span class="modal__icon" aria-hidden="true">◌</span>
+          <div>
+            <p class="modal__kicker">قلب حاضر ولسان ذاكر</p>
+            <h2 id="etiquetteTitle">سنن وآداب الدعاء</h2>
+          </div>
+        </div>
+        <p class="modal__lead">آداب يسيرة تجعل جلسة الدعاء أهدأ وأجمع للقلب.</p>
+        <ul class="adab-list">
+          <li>الإخلاص لله تعالى.</li>
+          <li>البدء بحمد الله والثناء عليه، ثم الصلاة على النبي ﷺ.</li>
+          <li>الدعاء بحضور قلب وخشوع ويقين بالإجابة.</li>
+          <li>الإلحاح في الدعاء وعدم الاستعجال.</li>
+          <li>خفض الصوت وترك التكلف.</li>
+          <li>الدعاء بخيري الدنيا والآخرة، مع التوبة والاستغفار.</li>
+          <li>تجنب الاعتداء في الدعاء وتحري الأوقات الفاضلة.</li>
+        </ul>
+        <p class="dhikr-callout">
+          ويُكثر المسلم من قول: «لا إله إلا الله وحده لا شريك له، له الملك وله الحمد، وهو على كل شيء قدير».
+        </p>
+        <p class="notice">
+          ورد في فضل دعاء يوم عرفة حديث: «خير الدعاء دعاء يوم عرفة، وخير ما قلت أنا والنبيون من قبلي:
+          لا إله إلا الله وحده لا شريك له، له الملك وله الحمد، وهو على كل شيء قدير». ويُحسن الرجوع إلى
+          مصادر الحديث مثل الدرر السنية لمعرفة درجة الحديث وكلام أهل العلم عليه.
+        </p>
+      </div>
+    </section>
+
+    <section
+      class="modal modal--confirm"
+      id="resetConfirmModal"
+      aria-modal="true"
+      aria-labelledby="resetConfirmTitle"
+      role="dialog"
+      hidden
+    >
+      <div class="modal__panel">
+        <button class="modal__close" type="button" aria-label="إغلاق النافذة" data-modal-close>×</button>
+        <div class="modal__header">
+          <span class="modal__icon" aria-hidden="true">↺</span>
+          <div>
+            <p class="modal__kicker">بداية جديدة</p>
+            <h2 id="resetConfirmTitle">إعادة من البداية</h2>
+          </div>
+        </div>
+        <p class="modal__lead">
+          سيتم تصفير التقدم والوقت والعودة إلى أول دعاء. هل تريد المتابعة؟
+        </p>
+        <div class="confirm-actions">
+          <button class="confirm-button confirm-button--primary" id="confirmReset" type="button">
+            نعم، ابدأ من جديد
+          </button>
+          <button class="confirm-button" id="cancelReset" type="button" data-modal-close>
+            إلغاء
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <script src="script.js"></script>
+  </body>
+</html>
