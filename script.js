@@ -749,6 +749,10 @@ const state = {
   wheelRemainder: 0,
   lastStepAt: 0,
   snapTimer: 0,
+  renderedReadCount: -1,
+  deckLayers: [],
+  previewCard: null,
+  currentCard: null,
   gestureActive: false,
   gestureBaseIndex: 0,
   gestureDirection: 0,
@@ -903,6 +907,8 @@ function saveProgress(readCount) {
 }
 
 function updateCounters(readCount) {
+  if (state.renderedReadCount === readCount) return;
+  state.renderedReadCount = readCount;
   state.readCount = readCount;
   readCountEl.textContent = String(readCount);
   remainingCountEl.textContent = String(Math.max(duas.length - readCount, 0));
@@ -962,35 +968,48 @@ function createCard(dua, offset) {
 
 function renderDeck(activeIndex) {
   if (!duas.length) {
+    state.deckLayers = [];
+    state.previewCard = null;
+    state.currentCard = null;
     deck.innerHTML = '<div class="empty-state">لم يتم العثور على أدعية للعرض.</div>';
     return;
   }
 
   if (activeIndex >= duas.length) {
+    state.deckLayers = [];
+    state.previewCard = null;
+    state.currentCard = null;
     deck.innerHTML = '<div class="empty-state">أتممت قراءة الأدعية. تقبل الله دعاءك.</div>';
     return;
   }
 
   deck.replaceChildren();
+  const layers = [];
   const layerCount = Math.min(2, duas.length - activeIndex - 2);
   for (let offset = layerCount + 1; offset >= 2; offset -= 1) {
     const layer = document.createElement("div");
     layer.className = "deck-layer";
     layer.dataset.offset = String(offset);
     layer.setAttribute("aria-hidden", "true");
+    layers.push(layer);
     deck.appendChild(layer);
   }
+  let previewCard = null;
   if (duas[activeIndex + 1]) {
-    const previewCard = createCard(duas[activeIndex + 1], 1);
+    previewCard = createCard(duas[activeIndex + 1], 1);
     previewCard.classList.add("dua-card--preview");
     previewCard.setAttribute("aria-hidden", "true");
     deck.appendChild(previewCard);
   }
-  deck.appendChild(createCard(duas[activeIndex], 0));
+  const currentCard = createCard(duas[activeIndex], 0);
+  deck.appendChild(currentCard);
+  state.deckLayers = layers;
+  state.previewCard = previewCard;
+  state.currentCard = currentCard;
 }
 
 function updateCardTransforms(fraction) {
-  deck.querySelectorAll(".deck-layer").forEach((layer) => {
+  state.deckLayers.forEach((layer) => {
     const offset = Number(layer.dataset.offset);
     const depth = Math.max(offset - fraction, 0);
     const scale = 1 - depth * 0.045;
@@ -1001,7 +1020,7 @@ function updateCardTransforms(fraction) {
     layer.style.transform = `translate3d(0, ${translateY}px, 0) scale(${scale})`;
   });
 
-  const preview = deck.querySelector('.dua-card[data-offset="1"]');
+  const preview = state.previewCard;
   if (preview) {
     const reveal = clamp((fraction - 0.16) / 0.72, 0, 1);
     const scale = 0.955 + reveal * 0.045;
@@ -1012,10 +1031,10 @@ function updateCardTransforms(fraction) {
     preview.style.setProperty("--preview-content-opacity", String(reveal));
   }
 
-  const card = deck.querySelector('.dua-card[data-offset="0"]');
+  const card = state.currentCard;
   if (!card) return;
   const translateX = state.reducedMotion ? 0 : fraction * 64;
-  const rotate = state.reducedMotion ? 0 : fraction * 1.25;
+  const rotate = 0;
   const opacity = state.reducedMotion ? 1 : 1 - fraction * 0.62;
   const scale = 1 - fraction * 0.014;
   card.style.zIndex = "20";
@@ -1027,6 +1046,21 @@ function setupLayout() {
   state.scrollStep = clamp(window.innerHeight * 0.58, 360, 560);
   root.style.setProperty("--dua-count", String(Math.max(duas.length, 1)));
   root.style.setProperty("--scroll-step", `${state.scrollStep}px`);
+}
+
+function updateViewportInsets() {
+  const viewport = window.visualViewport;
+  const bottomInset = viewport
+    ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+    : 0;
+  root.style.setProperty("--browser-bottom-inset", `${Math.round(bottomInset)}px`);
+}
+
+function setupViewportInsets() {
+  updateViewportInsets();
+  window.visualViewport?.addEventListener("resize", updateViewportInsets, { passive: true });
+  window.visualViewport?.addEventListener("scroll", updateViewportInsets, { passive: true });
+  window.addEventListener("resize", updateViewportInsets, { passive: true });
 }
 
 function maxDuaIndex() {
@@ -1048,9 +1082,9 @@ function withInstantScroll(callback) {
   root.style.scrollBehavior = previousScrollBehavior;
 }
 
-function scrollToYInstant(top) {
+function scrollToYInstant(top, shouldRequestUpdate = true) {
   withInstantScroll(() => window.scrollTo(0, top));
-  requestScrollUpdate();
+  if (shouldRequestUpdate) requestScrollUpdate();
 }
 
 function scrollToReaderProgress(progress, behavior = "auto") {
@@ -1113,16 +1147,10 @@ function requestScrollUpdate() {
 function scheduleReaderSnap() {
   window.clearTimeout(state.snapTimer);
   if (state.navigating || state.gestureActive || state.openModal || !isReaderInteractionZone()) return;
-  if (!canStartCardNavigation()) {
-    scrollToReaderProgress(state.settledIndex, "auto");
-    return;
-  }
+  if (!canStartCardNavigation()) return;
   state.snapTimer = window.setTimeout(() => {
     if (state.navigating || state.gestureActive || state.openModal || !isReaderInteractionZone()) return;
-    if (!canStartCardNavigation()) {
-      scrollToReaderProgress(state.settledIndex, "auto");
-      return;
-    }
+    if (!canStartCardNavigation()) return;
     const progress = readScrollProgress();
     const lower = Math.floor(progress);
     const fraction = progress - lower;
@@ -1233,10 +1261,8 @@ function updateGesturePreview(direction, fraction) {
 function commitGesture() {
   if (!state.gestureActive || state.gestureCommitted) return;
   const targetIndex = state.gestureBaseIndex + state.gestureDirection;
-  const partialProgress = state.gestureBaseIndex + state.gestureDirection * state.gestureVisualProgress;
   state.gestureCommitted = true;
   state.gestureActive = false;
-  scrollToReaderProgress(partialProgress, "auto");
   lockCardNavigation();
   clearGestureTimer();
   goToDuaIndex(targetIndex);
@@ -1245,9 +1271,6 @@ function commitGesture() {
 function cancelGesture() {
   if (!state.gestureActive || state.gestureCommitted) return;
   const targetIndex = state.gestureBaseIndex;
-  const partialProgress = state.gestureBaseIndex + state.gestureDirection * state.gestureVisualProgress;
-  scrollToReaderProgress(partialProgress, "auto");
-  resetGestureState();
   goToDuaIndex(targetIndex);
 }
 
@@ -1281,17 +1304,26 @@ function goToDuaIndex(targetIndex) {
   clearGestureTimer();
   const nextIndex = clamp(targetIndex, 0, maxDuaIndex());
   const targetY = reader.offsetTop + nextIndex * state.scrollStep;
-  const startY = window.scrollY;
-  const distance = targetY - startY;
-  const duration = clamp(Math.abs(distance) * 0.7, 210, 340);
+  const previousSettled = clamp(state.settledIndex, 0, maxDuaIndex());
+  const gestureDirection = state.gestureDirection;
+  const gestureFraction = clamp(state.gestureVisualProgress, 0, 1);
+  const direction = nextIndex === previousSettled ? gestureDirection : nextIndex > previousSettled ? 1 : -1;
+  const visualIndex = direction > 0 ? previousSettled : Math.max(previousSettled - 1, 0);
+  const startFraction =
+    direction > 0
+      ? gestureFraction
+      : state.gestureActive || state.gestureCommitted
+        ? 1 - gestureFraction
+        : 1;
+  const endFraction = nextIndex === previousSettled ? (direction > 0 ? 0 : 1) : direction > 0 ? 1 : 0;
+  const duration = state.reducedMotion ? 0 : 220;
   state.navigating = true;
-  state.activeIndex = -1;
   if (nextIndex !== state.settledIndex) {
     lockCardNavigation();
   }
 
   const finishNavigation = () => {
-    scrollToYInstant(targetY);
+    scrollToYInstant(targetY, false);
     state.navigating = false;
     state.activeIndex = -1;
     state.settledIndex = nextIndex;
@@ -1299,16 +1331,22 @@ function goToDuaIndex(targetIndex) {
     updateFromScroll();
   };
 
-  if (state.reducedMotion || Math.abs(distance) <= 1.25) {
+  if (!direction || state.reducedMotion || startFraction === endFraction) {
     finishNavigation();
     return;
   }
 
+  if (visualIndex !== state.activeIndex || !deck.children.length) {
+    state.activeIndex = visualIndex;
+    renderDeck(visualIndex);
+  }
+  updateCardTransforms(startFraction);
+
   const startedAt = performance.now();
   const animateNavigation = (now) => {
     const progress = clamp((now - startedAt) / duration, 0, 1);
-    const nextY = startY + distance * easeOutCubic(progress);
-    scrollToYInstant(nextY);
+    const eased = easeOutCubic(progress);
+    updateCardTransforms(startFraction + (endFraction - startFraction) * eased);
 
     if (progress < 1 && now - startedAt <= NAVIGATION_TIMEOUT) {
       state.navigationFrame = window.requestAnimationFrame(animateNavigation);
@@ -1381,7 +1419,6 @@ function setupCardStepNavigation() {
 
       if (!canStartCardNavigation()) {
         state.pointerLocked = true;
-        scrollToReaderProgress(state.settledIndex, "auto");
       }
     },
     { passive: false, capture: true },
@@ -1457,7 +1494,6 @@ function setupCardStepNavigation() {
         }
         if (!canStartCardNavigation()) {
           state.touchLocked = true;
-          scrollToReaderProgress(state.settledIndex, "auto");
         }
       }
     },
@@ -1585,6 +1621,7 @@ function setupFloatingControls() {
 
 function openModal(modal) {
   window.clearTimeout(state.modalCloseTimer);
+  updateViewportInsets();
   state.lastFocus = document.activeElement;
   state.openModal = modal;
   lockPageScroll();
@@ -1722,6 +1759,7 @@ function init() {
   history.scrollRestoration = "manual";
   initTheme();
   setupLayout();
+  setupViewportInsets();
   startTimer();
   setupModals();
   setupKeyboardScroll();
