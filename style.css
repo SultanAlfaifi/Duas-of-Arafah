@@ -492,7 +492,7 @@ h1 {
     linear-gradient(145deg, color-mix(in srgb, var(--surface-solid), transparent 7%), color-mix(in srgb, var(--surface-solid), transparent 12%)),
     radial-gradient(circle at 10% 10%, var(--gold-soft), transparent 44%);
   box-shadow: var(--card-shadow);
-  transform-origin: center top;
+  transform-origin: center bottom;
   backface-visibility: hidden;
   contain: layout paint style;
   will-change: transform, opacity;
@@ -503,6 +503,7 @@ h1 {
   flex-direction: column;
   padding: clamp(18px, 5vw, 30px);
   touch-action: none;
+  transform-origin: center center;
 }
 
 .dua-card--preview .dua-card__meta,

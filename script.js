@@ -675,9 +675,9 @@ const STORAGE_KEYS = {
 };
 
 const CARD_SNAP_THRESHOLD = 0.3;
-const CARD_STEP_COOLDOWN = 500;
-const SNAP_CANCEL_DELAY = 120;
-const NAVIGATION_TIMEOUT = 850;
+const CARD_STEP_COOLDOWN = 220;
+const SNAP_CANCEL_DELAY = 60;
+const NAVIGATION_TIMEOUT = 500;
 
 const quranSources = [
   "سورة البقرة، الآيتان 127-128",
@@ -1089,12 +1089,11 @@ function updateCardTransforms(fraction) {
 
   const card = state.currentCard;
   if (!card) return;
-  const translateX = state.reducedMotion ? 0 : fraction * 64;
-  const rotate = 0;
-  const opacity = state.reducedMotion ? 1 : 1 - fraction * 0.62;
-  const scale = 1 - fraction * 0.014;
-  card.style.opacity = String(clamp(opacity, 0.22, 1));
-  card.style.transform = `translate3d(${translateX}%, 0, 0) scale(${scale}) rotate(${rotate}deg)`;
+  const translateY = state.reducedMotion ? 0 : -fraction * 28;
+  const opacity = state.reducedMotion ? 1 : 1 - fraction * 0.78;
+  const scale = 1 - fraction * 0.045;
+  card.style.opacity = String(clamp(opacity, 0.08, 1));
+  card.style.transform = `translate3d(0, ${translateY}px, 0) scale(${scale})`;
 }
 
 function setupLayout() {
@@ -1321,13 +1320,43 @@ function beginGesture(direction) {
   return true;
 }
 
+function swapToBackwardCard() {
+  const N = state.gestureBaseIndex;
+  const N1 = N - 1;
+  if (N1 < 0 || !duas[N1] || !state.currentCard || state.activeIndex !== N) return false;
+
+  const outgoing = state.currentCard;
+  const incoming = createCard(duas[N1], 0);
+  incoming.style.zIndex = "20";
+
+  outgoing.style.setProperty("--preview-content-opacity", "1");
+  outgoing.dataset.offset = "1";
+  outgoing.style.zIndex = "12";
+  outgoing.classList.add("dua-card--preview");
+  outgoing.setAttribute("aria-hidden", "true");
+
+  if (state.previewCard) {
+    state.previewCard.remove();
+  }
+
+  deck.appendChild(incoming);
+  state.activeIndex = N1;
+  state.currentCard = incoming;
+  state.previewCard = outgoing;
+  return true;
+}
+
 function updateGesturePreview(direction, fraction) {
   const visualIndex = direction > 0 ? state.gestureBaseIndex : state.gestureBaseIndex - 1;
   if (visualIndex < 0 || visualIndex > maxDuaIndex()) return;
 
   if (visualIndex !== state.activeIndex || !deck.children.length) {
-    state.activeIndex = visualIndex;
-    renderDeck(visualIndex);
+    if (direction < 0 && state.currentCard && state.activeIndex === state.gestureBaseIndex) {
+      swapToBackwardCard();
+    } else {
+      state.activeIndex = visualIndex;
+      renderDeck(visualIndex);
+    }
   }
 
   const visualFraction = direction > 0 ? fraction : 1 - fraction;
@@ -1450,11 +1479,10 @@ function goToDuaIndex(targetIndex) {
         ? 1 - gestureFraction
         : 1;
   const endFraction = nextIndex === previousSettled ? (direction > 0 ? 0 : 1) : direction > 0 ? 1 : 0;
-  const duration = state.reducedMotion ? 0 : 220;
+  const isCanceling = nextIndex === previousSettled;
+  const cancelDist = isCanceling ? Math.abs(endFraction - startFraction) : 1;
+  const duration = state.reducedMotion ? 0 : isCanceling ? Math.round(cancelDist * 100) : 180;
   state.navigating = true;
-  if (nextIndex !== state.settledIndex) {
-    lockCardNavigation();
-  }
 
   const finishNavigation = () => {
     scrollToYInstant(targetY, false);
@@ -1499,7 +1527,7 @@ function goToDuaIndex(targetIndex) {
 
 function stepDua(direction) {
   const now = Date.now();
-  if (state.navigating || state.gestureActive || !canStartCardNavigation() || now - state.lastStepAt < 380) return;
+  if (state.navigating || state.gestureActive || !canStartCardNavigation() || now - state.lastStepAt < 200) return;
   state.lastStepAt = now;
   goToDuaIndex(state.settledIndex + direction);
 }
